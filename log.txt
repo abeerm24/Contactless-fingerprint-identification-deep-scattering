@@ -1,0 +1,2 @@
+For Deep ScatNet + RDF classfication: training time 9.2 secs per 10 images. Total training time 2001.26 secs.
+Accuracy: 
