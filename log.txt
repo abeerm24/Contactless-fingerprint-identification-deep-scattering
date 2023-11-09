@@ -1,2 +1,8 @@
 For Deep ScatNet + RDF classfication: training time 9.2 secs per 10 images. Total training time 2001.26 secs.
 Accuracy: 
+
+For Deep ScatNet + Siamese network similarity prediction; training time 22 secs per 10 image pairs. Total training time 52094 
+(4 epochs, total 6000 image pairs used, bce loss used)
+
+For Deep ScatNet + Siamese 2 similarity prediction; training time 19.32 secs per 10 image pairs. Total training time 16400 secs.
+ 
