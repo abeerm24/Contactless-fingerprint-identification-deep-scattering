@@ -10,8 +10,8 @@ class MakeDataset(data.Dataset):
 
     :param dataset_type: The dataset to be used. Currently only "ieee".
     ''' 
-    def __init__(self,dataset_type, mode):
-        if dataset_type=="ieee":
+    def __init__(self,dataset_type, mode, model = "siamese"):
+        if dataset_type=="ieee" and model=="siamese":
             '''Create the IEEE dataset object'''
             
             # Create gallery dataset
@@ -25,8 +25,9 @@ class MakeDataset(data.Dataset):
                 files = os.listdir(folder)
                 self.gallery_paths.append(os.path.join(folder,files[0]))
 
-            self.same_labels = []   # Labels of whe
-            self.paths = []         # Store paths to pairs of images
+            #self.same_labels = []   # Labels of whe
+            self.positive_paths = []        # Store paths to fingerprint pairs of the same person 
+            self.negative_paths = []        # Store paths to fingerprint pairs of different people
 
             # Create the required training or testing dataset
             if mode == "train":
@@ -36,13 +37,15 @@ class MakeDataset(data.Dataset):
 
                 for i in range(len(self.gallery_labels)):
                     label = self.gallery_labels[i]
-                    # Add 2 images of the same person in the dataset
+                    # Add 3 images of the same person in the dataset
                     same_folder = os.path.join(PATH,label)
                     same_label_files = os.listdir(same_folder)[1:] # Discard the first image as it's used in gallery
-                    same_label_files = random.sample(same_label_files,2) # Randomly sample paths to 2 images of the same person 
-                    self.paths.extend([(same_label_files[0], self.gallery_paths[i]),
-                                       [(same_label_files[1], self.gallery_paths[i])]]) # Append the image path pair 
-                    self.same_labels.extend([1,1])
+                    same_label_files = random.sample(same_label_files,3) # Randomly sample paths to 2 images of the same person 
+                    #self.paths.extend([(same_label_files[0], self.gallery_paths[i]),
+                    #                   [(same_label_files[1], self.gallery_paths[i])]]) # Append the image path pair 
+                    for same_label_file in same_label_files:
+                        self.positive_paths.append((self.gallery_paths[i], os.path.join(same_folder, same_label_file)))
+                    #self.same_labels.extend([1,1])
 
                     # Add 3 images of different label in the dataset
                     use_folders = all_folders.copy()
@@ -52,8 +55,7 @@ class MakeDataset(data.Dataset):
                         folder_path = os.path.join(PATH,random_folder)
                         random_file = random.sample(os.listdir(folder_path),1)[0] # Randomly choose one file from the folder
                         random_file = os.path.join(folder_path,random_file)
-                        self.paths.append((random_file,self.gallery_paths[i]))
-                        self.same_labels.append(0)
+                        self.negative_paths.append((self.gallery_paths[i],random_file))
 
             elif mode == "test":
                 PATH = "D:/Cross_Fingerprint_Images_Database/processed_contactless_2d_fingerprint_images/second_session"
@@ -66,16 +68,23 @@ class MakeDataset(data.Dataset):
     
     def __len__(self):
          '''Return the size of the dataset'''
-         return len(self.paths)
+         return len(self.positive_paths)
          
     def gallery_size(self):
          '''Return the no. of images used in the gallery'''
          return len(self.gallery_labels)
 
     def __getitem__(self,index):
-        label = self.same_labels[index]
-        img_path = self.paths[index] 
-        img1 =cv2.cvtColor(cv2.imread(img_path[0]), cv2.COLOR_BGR2GRAY) 
-        img2 = cv2.cvtColor(cv2.imread(img_path[1]),cv2.COLOR_BGR2GRAY)
+        # label = self.same_labels[index]
+        # img_path = self.paths[index] 
+        # img1 =cv2.cvtColor(cv2.imread(img_path[0]), cv2.COLOR_BGR2GRAY) 
+        # img2 = cv2.cvtColor(cv2.imread(img_path[1]),cv2.COLOR_BGR2GRAY)
         # return {"image" : img, "paths" : img_path}
-        return (img1,img2,label)
+
+        (anchor_img, pos_img) = self.positive_paths[index]
+        (_,neg_img) = self.negative_paths[index]
+
+        anchor_img = cv2.cvtColor(cv2.imread(anchor_img), cv2.COLOR_BGR2GRAY)
+        pos_img = cv2.cvtColor(cv2.imread(pos_img), cv2.COLOR_BGR2GRAY)
+        neg_img = cv2.cvtColor(cv2.imread(neg_img), cv2.COLOR_BGR2GRAY)
+        return (anchor_img,pos_img,neg_img)
