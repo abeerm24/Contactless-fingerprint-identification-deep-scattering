@@ -1,11 +1,16 @@
 import torch
 import numpy as np
-from model import SiameseNetwork3, ScatteringNetwork2
+from model import ScatteringNetwork
 import argparse
 from utils import MakeDataset
+from sklearn.ensemble import RandomForestClassifier
+# import tfdf.keras.RandomForestModel as RandomForestModel
+import tensorflow as tf
+import keras
+# import pickle
+import joblib
 import time
 from torch.utils.data import DataLoader
-import random
 
 start = time.time()
 
@@ -14,84 +19,81 @@ start = time.time()
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--dataset", help="Dataset to be used", choices=("ieee"))
-# parser.add_argument("--trees", default=100, help = "No. of trees to be used in the RDF classifier")
-parser.add_argument("--num_epochs", default = 5, type= int, help = "No. of epochs to train the RDF classifier")
-parser.add_argument("--lr", default = 0.0001,type = float, help = "Learning rate to train the model")
+parser.add_argument("--trees", default=100, help = "No. of trees to be used in the RDF classifier")
+# parser.add_argument("--num_epochs", default = 10, help = "No. of epochs to train the RDF classifier")
 
 args = parser.parse_args()
 
 dataset_type = args.dataset
-# num_trees = args.trees
-num_epochs = args.num_epochs
-lr = args.lr
-batch_size = 10
+num_trees = args.trees
+# num_epochs = args.num_epochs
 
 '''***********************Prepare training dataset****************************************'''
 
-dataset = MakeDataset(dataset_type,mode = "train", classifier_type= "siamese")
+dataset = MakeDataset(dataset_type,"train")
 
-train_dataloader = DataLoader(dataset, batch_size = batch_size, shuffle = True) # Split the dataset into batches of 10 images
-#num_samples = 5000
-#sample_indices = random.sample(range(len(train_dataloader.dataset)), num_samples)
-#subset = torch.utils.data.Subset(dataset, sample_indices)
-#subset_dataloader = DataLoader(subset, batch_size=batch_size, shuffle = True)
+labels = []
+imgs = []
+
+# Create the vectors for training 
+# for i, data in enumerate(dataset):
+#     imgs.append(data["image"])
+#     labels.append(data["label"])
+
+train_dataloader = DataLoader(dataset, batch_size = 10, shuffle = True) # Split the dataset into batches of 50 images
 
 print("Dataset prepared. Time: ", time.time() - start)
-print("No. of pairs: ", len(train_dataloader.dataset))
 
-'''********************Apply DSN + Siamese network on the images**********************'''
+'''********************Apply scattering network on the images**********************'''
 
-(_, (img1, _, _)) = enumerate(train_dataloader).__next__()  # Load one image from the dataset
-(_,H,W) = img1.shape                                    # Getting the image shape
+# Convert the list to a pytorch tensor
+# imgs = np.array(imgs)           # Convert to numpy array
+# imgs = torch.from_numpy(imgs)   # Convert to pytorch tensor
+# (N,H,W) = imgs.shape
+# imgs = torch.reshape(imgs,(N,1,H,W)) # Reshape the tensor to the appropriate format for deep scatterin network
 
-# Initialize the Siamese network classifier
-ScatNet = ScatteringNetwork2()
-siam_net = SiameseNetwork3(ScatNet, img_size=(H,W))
+# Apply the deep scattering network
+ScatNet = ScatteringNetwork()
+# sn_features = ScatNet(imgs)
 
-# Define BCE loss function
-#loss_fn = torch.nn.BCELoss()
-loss_fn = torch.nn.MSELoss()
+# Initialize the random forest model
+# model = RandomForestClassifier(warm_start=True, verbose = 1, n_estimators=1) 
+#model = tf.estimator.RandomForestRegressor(n_estimators=100)
+model = RandomForestClassifier(n_estimators = 100)
+loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+optimizer = keras.optimizers.SGD(learning_rate=1e-3)
+# Setting warm_start = true means that successive calls to model.fit will not fit entirely new models, but add successive trees
 
-loss_vals = [] # List to store loss values
+# for epoch in range(num_epochs):
+for (i, (imgs, labels)) in enumerate(train_dataloader):
+    iter_start = time.time()
+    (N,H,W) = imgs.shape
+    imgs = torch.reshape(imgs, (N,1,H,W))
+    sn_features = ScatNet(imgs).numpy()             
+    sn_tensor = tf.convert_to_tensor(sn_features)   # Convert to tensorflow
+    # model.fit(sn_features, labels)
+    with tf.GradientTape() as tape:
+        y_pred =  model(sn_tensor, training = True)
+        loss_value = loss_fn(labels, y_pred)
+    grads = tape.gradient(loss_value, model.trainable_weights)
+    optimizer.apply_gradients(zip(grads, model.trainable_weights))
+    iter_end = time.time()
+    if i%10==0:
+        print("Iter " + str(i) + " completed. Time = ", str(iter_end-iter_start))
+    #model.n_estimators += 1
+    #if i==8:    break
+#print("Epoch " + str(epoch) +  " completed. Time: {}" + str(time.time() - start))
 
-# Definie Adam optimizer
-optimizer = torch.optim.Adam(siam_net.parameters(),lr = lr)
-iter = 0
-for epoch in range(num_epochs):
-    for (i, (img1, img2, same_label)) in enumerate(train_dataloader):
-        iter_start = time.time()
-        (N,H,W) = img1.shape
-        img1 = torch.reshape(img1, (N,1,H,W))
-        img2 = torch.reshape(img2, (N,1,H,W))
-
-        pred = torch.flatten(siam_net(img1, img2)) # Apply the siamese network to get the similarity score
-        print(pred)
-        print(same_label)
-        # Optimizer step
-        loss = loss_fn(torch.flatten(pred), same_label.to(torch.float)) # Compute loss
-        optimizer.zero_grad()       # Set zero grad for optimizer
-        loss.backward()             # Compute gradients and modify the model parameters
-        optimizer.step()            
-        
-        loss_vals.append(loss.item())
-        #if i%10 == 0:
-        print("Epoch: " + str(epoch) + " iter: " + str(i) + " Loss: " + str(loss.item()) + " Time taken: " + str(time.time() - iter_start))
-        if i%10==0:
-            PATH = "siam_v3/model_" + str(iter) + ".pth"
-            torch.save(siam_net.state_dict(), PATH)
-    
-    PATH = "siam_v3.pth"
-    torch.save(siam_net.state_dict(), PATH)
-
-
+#print("Feature extraction done. Time: ", time.time() - start)
 print("Training complete. Time taken: ", time.time()- start)
 
-# Save the model
-PATH = "siam_v3.pth"
-torch.save(siam_net.state_dict(), PATH)
+# Save the RDF model parameters
+filename = "rdf-iter6.sav"
+#pickle.dump(model, open(filename, 'wb'))
+joblib.dump(model, open(filename, 'wb'))
 
-file = open('siam_mse_loss-2.txt','w')
-for loss_val in loss_vals:
-    file.write(str(loss_val)+"\n")
-file.close()
+'''********************Random decision forest for classification*********************'''
+
+#model = RandomForestClassifier(verbose = 1)
+
 
