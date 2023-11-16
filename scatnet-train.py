@@ -1,7 +1,8 @@
 import torch
 import numpy as np
 from model import ScatteringNetwork
-from model import SiameseNetwork
+#from model import SiameseNetwork
+from model import SiameseClassifier
 import argparse
 from utils import MakeDataset
 import time
@@ -37,18 +38,13 @@ print("Dataset prepared. Time: ", time.time() - start)
 ScatNet = ScatteringNetwork(theta_div = 5, ds = 4)
 model = SiameseNetwork(ScatNet)
 
-# def triplet_loss(pos_dist, neg_dist, margin = 0.5):
-#     loss = pos_dist - neg_dist
-#     loss = torch.mean(loss)
-#     return torch.max(torch.tensor([loss+margin, 0]))
-#     return loss + margin
-
-triplet_loss = torch.nn.TripletMarginLoss(margin=0.5, p=2, eps=1e-7)
-optimizer = torch.optim.SGD(model.parameters(), lr=lr) # Initialize optimizer
+# Code for implementing tripple loss with SGD optimizer 
+# triplet_loss = torch.nn.TripletMarginLoss(margin=0.5, p=2, eps=1e-7)
+# optimizer = torch.optim.SGD(model.parameters(), lr=lr) # Initialize optimizer
 
 '''********************Apply scattering+siamese network on the images**********************'''
 ctrl = 0
-f = open("tripple-loss-v1.txt", "a")
+f = open("tripple-loss-v2.txt", "a")
 
 for epoch in range(num_epochs):
     for (i, (anchor_img,pos_img,neg_img)) in enumerate(train_dataloader):
@@ -59,16 +55,16 @@ for epoch in range(num_epochs):
         pos_img = torch.reshape(pos_img, (N,1,H,W))
         neg_img = torch.reshape(neg_img, (N,1,H,W))
 
-        pos_f = model(pos_img)
-        neg_f = model(neg_img)
-        anchor_f = model(anchor_img)
+        # pos_f = model(pos_img)
+        # neg_f = model(neg_img)
+        # anchor_f = model(anchor_img)
 
         optimizer.zero_grad()
 
         loss = triplet_loss(anchor_f,pos_f,neg_f)
         loss.backward()
         
-        f.write(str(loss)+ "\n")
+        f.write(str(loss.item())+ "\n")
         print("Triplet loss: " + str(loss.item()))
 
         optimizer.step()
@@ -76,13 +72,14 @@ for epoch in range(num_epochs):
         iter_end = time.time()
 
         if i%10==0:
-            filename = "siamese-models/siam_v1_" + str(ctrl) + ".pth"
-            torch.save(model.state_dict, filename)
+            filename = "siamese-models/siam_v2_" + str(ctrl) + ".pth"
+            torch.save(model.state_dict(), filename)
+            ctrl+=1
     
 #print("Feature extraction done. Time: ", time.time() - start)
 print("Training complete. Time taken: ", time.time()- start)
 
 # Save the RDF model parameters
-filename = "siamese-models/siam_v1_final.pth"
-torch.save(model.state_dict, filename)
+filename = "siamese-models/siam_v2_final.pth"
+torch.save(model.state_dict(), filename)
 

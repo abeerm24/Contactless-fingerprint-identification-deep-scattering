@@ -115,4 +115,22 @@ class SiameseNetwork(torch.nn.Module):
         f = self.compute_feature(img)
         
         return f
-            
+
+class SiameseClassifier(torch.nn.Module):
+    '''
+    Class to perform final classification of 2 images as similar or not
+    '''
+    def __init__(self,scatnet, margin = 0.5):
+        super(SiameseClassifier).__init__()
+        self.scatnet = scatnet
+        self.siam_layer = SiameseNetwork(scatnet,margin)
+        self.dense = torch.nn.Linear(in_features = 616, out_features = 1, bias = True) # infeatures = 616 for IEEE processed image size
+        self.sigmoid = torch.nn.Sigmoid()
+    
+    def forward(self, img1, img2):
+        f_img1 = self.siam_layer(img1)
+        f_img2 = self.siam_layer(img2)
+        diff = torch.abs(f_img1 - f_img2)
+        out = self.dense(diff)
+        out = self.sigmoid(out)
+        return out
