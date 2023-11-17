@@ -88,3 +88,54 @@ class MakeDataset(data.Dataset):
         pos_img = cv2.cvtColor(cv2.imread(pos_img), cv2.COLOR_BGR2GRAY)
         neg_img = cv2.cvtColor(cv2.imread(neg_img), cv2.COLOR_BGR2GRAY)
         return (anchor_img,pos_img,neg_img)
+
+class LabeledPairDataset(data.Dataset):
+    '''
+    Class to make labeled paired datasets for testing the siamese network
+    '''
+
+    def __init__(self, mode, dataset_type = "ieee"):
+        
+        self.path_pairs = []
+        self.labels = []
+
+        if dataset_type == "ieee":
+            if mode == "test":
+                PATH = "D:/Cross_Fingerprint_Images_Database/processed_contactless_2d_fingerprint_images/second_session"
+                N = 2
+            elif mode == "train":
+                PATH = "D:/Cross_Fingerprint_Images_Database/processed_contactless_2d_fingerprint_images/first_session"
+                N = 5
+            else:
+                raise Exception("Unrecognized mode. Use 'train' or 'test'.")
+
+            folders = os.listdir(PATH)
+
+            for folder in folders:
+                folder_path = os.path.join(PATH, folder)
+                for i in range(N): # Repeat the process N times for each folder
+                    if random.random() < 0.3: # With 30 % probability choose fingerprint of the same person
+                        [file1, file2] = random.sample(os.listdir(folder_path),2)
+                        self.path_pairs.append((os.path.join(folder_path,file1),os.path.join(folder_path,file2)))
+                        self.labels.append(1.)
+                    else: # With 70 % probability choose some other other person
+                        folder2 = random.sample(folders,1)[0]
+                        folder2_path = os.path.join(PATH, folder2)
+                        file1 = random.sample(os.listdir(folder_path),1)[0]
+                        file2 = random.sample(os.listdir(folder2_path),1)[0]
+                        self.path_pairs.append((os.path.join(folder_path,file1),os.path.join(folder2_path,file2)))
+                        self.labels.append(0.)
+        
+        else:
+            raise Exception("Unrecognized dataset type.")
+    
+    def __len__(self):
+        '''Return no. of pairs in the dataset'''
+        return len(self.labels)
+    
+    def __getitem__(self, index):
+        (file1, file2) = self.path_pairs[index]
+        label = self.labels[index]
+        img1 = cv2.cvtColor(cv2.imread(file1), cv2.COLOR_BGR2GRAY)
+        img2 = cv2.cvtColor(cv2.imread(file2), cv2.COLOR_BGR2GRAY)
+        return (label, img1, img2)

@@ -2,3 +2,9 @@ For Deep ScatNet + RDF classfication: training time 9.2 secs per 10 images. Tota
 Accuracy: 
 
 For scatnet + siamese network: Total training time 18000 secs.
+
+For scatnet + siamese network, distance values on training dataset:
+mean pos dist:  4.272645527408237
+std pos dist:  1.23637133218063
+mean neg dist 5.865790309414031
+std neg dist 1.297391340279686
