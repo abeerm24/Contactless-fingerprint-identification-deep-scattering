@@ -119,7 +119,9 @@ class LabeledPairDataset(data.Dataset):
                         self.path_pairs.append((os.path.join(folder_path,file1),os.path.join(folder_path,file2)))
                         self.labels.append(1.)
                     else: # With 70 % probability choose some other other person
-                        folder2 = random.sample(folders,1)[0]
+                        use_folders = folders.copy()
+                        use_folders.remove(folder)
+                        folder2 = random.sample(use_folders,1)[0]
                         folder2_path = os.path.join(PATH, folder2)
                         file1 = random.sample(os.listdir(folder_path),1)[0]
                         file2 = random.sample(os.listdir(folder2_path),1)[0]
